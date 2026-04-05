@@ -9,13 +9,13 @@ Concentration is defined as the negative Euclidean distance from the origin. Hig
 
 ## Installation
 
-Requires Python 3 and matplotlib:
+Requires Python 3, matplotlib, and Flask:
 
 ```bash
-python3 -m pip install matplotlib
+python3 -m pip install matplotlib flask
 ```
 
-## Generating Plots
+## Generating Plots Locally
 
 Run the main script:
 
@@ -40,3 +40,49 @@ Adjust parameters in `main.py` or pass them to the `ChemotaxisSimulator` constru
 | `num_trajectories` | 10      | Number of trajectories to generate               |
 | `step_size`        | 1.0     | Distance travelled in a single step              |
 | `bounds`           | (-10, 10) | Range for random starting positions on each axis |
+
+## API
+
+Start the development server:
+
+```bash
+flask run --port 5000
+```
+
+### `POST /simulate`
+
+Run a simulation and return the resulting plots as base64-encoded PNG images.
+
+**Request body** (JSON, all fields optional):
+
+| Field               | Type   | Default    | Description                                       |
+| ------------------- | ------ | ---------- | ------------------------------------------------- |
+| `num_steps`         | int    | 50         | Number of time-steps per trajectory               |
+| `num_trajectories`  | int    | 10         | Number of trajectories to generate                |
+| `step_size`         | float  | 1.0        | Distance travelled in a single step               |
+| `bounds`            | list   | [-10, 10]  | `[min, max]` range for random starting positions  |
+
+**Example request:**
+
+```bash
+curl -X POST http://127.0.0.1:5000/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"num_steps": 20, "num_trajectories": 5}'
+```
+
+**Response** (JSON):
+
+```json
+{
+  "trajectories": "<base64-encoded PNG>",
+  "concentration_vs_time": "<base64-encoded PNG>"
+}
+```
+
+The `trajectories` field contains the 2D spatial plot and `concentration_vs_time` contains the concentration-over-time plot. Both are PNG images encoded as base64 strings, ready to embed in an `<img>` tag:
+
+```html
+<img src="data:image/png;base64,<base64-string>" />
+```
+
+Invalid input returns a `400` status with an error message in the `error` field.
