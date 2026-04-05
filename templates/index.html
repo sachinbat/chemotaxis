@@ -4,9 +4,257 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E. coli Chemotaxis Simulation</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        h1 {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        form {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .field {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .bounds-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .bounds-row span {
+            font-weight: 600;
+        }
+
+        .bounds-row input {
+            flex: 1;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #555;
+        }
+
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results h2 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+
+        .plot-wrapper img {
+            width: 100%;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            cursor: zoom-in;
+        }
+
+        /* Lightbox overlay */
+        .lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            cursor: zoom-out;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox img {
+            max-width: 95vw;
+            max-height: 95vh;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
-    <h1>E. coli Chemotaxis Simulation</h1>
-    <p>Frontend coming soon.</p>
+    <div class="container">
+        <h1>E. coli Chemotaxis Simulation</h1>
+
+        <form id="sim-form">
+            <div class="field">
+                <label for="num-steps">Number of steps</label>
+                <input type="number" id="num-steps" name="num_steps" value="50" min="1">
+            </div>
+            <div class="field">
+                <label for="num-trajectories">Number of trajectories</label>
+                <input type="number" id="num-trajectories" name="num_trajectories" value="10" min="1">
+            </div>
+            <div class="field">
+                <label for="step-size">Step size</label>
+                <input type="number" id="step-size" name="step_size" value="1.0" min="0.01" step="any">
+            </div>
+            <div class="field">
+                <label>Bounds (min, max)</label>
+                <div class="bounds-row">
+                    <input type="number" id="bounds-min" name="bounds_min" value="-10">
+                    <span>to</span>
+                    <input type="number" id="bounds-max" name="bounds_max" value="10">
+                </div>
+            </div>
+            <button type="submit" id="run-btn">Run Simulation</button>
+        </form>
+
+        <div class="error" id="error"></div>
+
+        <div class="results" id="results">
+            <div class="plot-wrapper">
+                <h2>Trajectories</h2>
+                <img id="img-trajectories" alt="Trajectories plot">
+            </div>
+            <div class="plot-wrapper">
+                <h2>Concentration vs Time</h2>
+                <img id="img-concentration" alt="Concentration vs time plot">
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox overlay for zooming into images -->
+    <div class="lightbox" id="lightbox">
+        <img id="lightbox-img" alt="Zoomed plot">
+    </div>
+
+    <script>
+        const form = document.getElementById("sim-form");
+        const btn = document.getElementById("run-btn");
+        const errorEl = document.getElementById("error");
+        const resultsEl = document.getElementById("results");
+        const lightbox = document.getElementById("lightbox");
+        const lightboxImg = document.getElementById("lightbox-img");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            errorEl.style.display = "none";
+            resultsEl.style.display = "none";
+            btn.disabled = true;
+            btn.textContent = "Running...";
+
+            const payload = {
+                num_steps: parseInt(document.getElementById("num-steps").value),
+                num_trajectories: parseInt(document.getElementById("num-trajectories").value),
+                step_size: parseFloat(document.getElementById("step-size").value),
+                bounds: [
+                    parseFloat(document.getElementById("bounds-min").value),
+                    parseFloat(document.getElementById("bounds-max").value)
+                ]
+            };
+
+            try {
+                const res = await fetch("/simulate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    errorEl.textContent = data.error || "Something went wrong.";
+                    errorEl.style.display = "block";
+                    return;
+                }
+
+                document.getElementById("img-trajectories").src =
+                    "data:image/png;base64," + data.trajectories;
+                document.getElementById("img-concentration").src =
+                    "data:image/png;base64," + data.concentration_vs_time;
+                resultsEl.style.display = "block";
+            } catch (err) {
+                errorEl.textContent = "Failed to reach the server.";
+                errorEl.style.display = "block";
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Run Simulation";
+            }
+        });
+
+        // Click any plot image to open in lightbox
+        document.querySelectorAll(".plot-wrapper img").forEach((img) => {
+            img.addEventListener("click", () => {
+                lightboxImg.src = img.src;
+                lightbox.classList.add("active");
+            });
+        });
+
+        // Close lightbox on click or Escape key
+        lightbox.addEventListener("click", () => {
+            lightbox.classList.remove("active");
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") lightbox.classList.remove("active");
+        });
+    </script>
 </body>
 </html>
