@@ -11,11 +11,17 @@ import io
 import matplotlib
 matplotlib.use("Agg")
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 from chemotaxis import ChemotaxisSimulator
 
 app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    """Serve the main frontend page."""
+    return render_template("index.html")
 
 
 @app.route("/simulate", methods=["POST"])
